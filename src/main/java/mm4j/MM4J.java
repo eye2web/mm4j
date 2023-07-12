@@ -1,10 +1,16 @@
 package mm4j;
 
 import mm4j.annotation.Constructor;
+import mm4j.annotation.Mapping;
+import mm4j.annotation.Mappings;
 
 import java.lang.reflect.*;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class MM4J {
     private MM4J() {
@@ -18,26 +24,30 @@ public class MM4J {
     private static class MM4JInvocationHandler implements InvocationHandler {
 
         @Override
-        public Object invoke(final Object proxy, final Method method, final Object... args) throws Throwable {
+        public Object invoke(final Object proxy, final Method callerMethod, final Object... args) throws Throwable {
 
-            if (method.getGenericParameterTypes()[0] == method.getReturnType()) {
-                return args[0];
+            final var inputObj = args[0];
+
+            if (callerMethod.getGenericParameterTypes()[0] == callerMethod.getReturnType()) {
+                return inputObj;
             }
 
-            final var returnClass = method.getReturnType();
+            final var returnClass = callerMethod.getReturnType();
 
             final java.lang.reflect.Constructor<?> constructor;
             final Object[] constructorArgs;
 
-            final var inputMethodsOpt = parseConstructorAnnotation(method, args[0]);
+            final var inputMethodsOpt = parseConstructorAnnotation(callerMethod, inputObj);
+
+            final var mappingAnnotations = getMappingAnnotations(callerMethod);
 
             if (inputMethodsOpt.isPresent()) {
                 final var inputMethods = inputMethodsOpt.get();
                 constructor = findMatchingConstructor(returnClass.getConstructors(), inputMethods, true);
-                constructorArgs = createConstructorArgs(constructor.getParameters(), args[0], inputMethods);
+                constructorArgs = createConstructorArgs(constructor.getParameters(), inputObj, inputMethods, mappingAnnotations);
             } else {
-                constructor = findMatchingConstructor(returnClass.getConstructors(), args[0]);
-                constructorArgs = createConstructorArgs(constructor.getParameters(), args[0], getAvailableMethods(args[0]));
+                constructor = findMatchingConstructor(returnClass.getConstructors(), inputObj);
+                constructorArgs = createConstructorArgs(constructor.getParameters(), inputObj, getAvailableMethods(inputObj), mappingAnnotations);
             }
 
             return constructor.newInstance(constructorArgs);
@@ -58,7 +68,7 @@ public class MM4J {
                                 methods.stream().filter(m ->
                                                 constructorAnnotation.caseSensitive() ?
                                                         m.getName().equals(mapping) :
-                                                        m.getName().toLowerCase(Locale.ROOT).equals(mapping.toLowerCase(Locale.ROOT))
+                                                        m.getName().equalsIgnoreCase(mapping)
                                         )
                                         .findFirst()
                                         .orElseThrow(RuntimeException::new)
@@ -67,10 +77,19 @@ public class MM4J {
             return Optional.empty();
         }
 
-        private Object[] createConstructorArgs(final Parameter[] constructorParams, final Object inputObject, final List<Method> methods) {
+        private Object[] createConstructorArgs(final Parameter[] constructorParams, final Object inputObject,
+                                               final List<Method> methods, final List<Mapping> mappingAnnotations) {
+
             return Arrays.stream(constructorParams)
                     .map(constructorParam -> {
-                        final var method = findMatchingMethod(constructorParam, methods);
+
+                        final var method = getMatchingMappingAnnotation(mappingAnnotations, constructorParam)
+                                .map(mapping ->
+                                        findMatchingMethod(constructorParam, methods, mapping.mapFrom(), mapping.caseSensitive())
+                                ).orElseGet(() ->
+                                        findMatchingMethod(constructorParam, methods)
+                                );
+
                         methods.remove(method);
                         try {
                             return method.invoke(inputObject);
@@ -81,6 +100,21 @@ public class MM4J {
                     .toArray(Object[]::new);
 
         }
+
+        private Optional<Mapping> getMatchingMappingAnnotation(final List<Mapping> mappingAnnotations, final Parameter param) {
+            if (!param.isNamePresent()) {
+                return Optional.empty();
+            }
+
+            return mappingAnnotations.stream()
+                    .filter(mapping ->
+                            mapping.caseSensitive() ?
+                                    mapping.mapTo().equals(param.getName()) :
+                                    mapping.mapTo().equalsIgnoreCase(param.getName())
+
+                    ).findFirst();
+        }
+
 
         private java.lang.reflect.Constructor<?> findMatchingConstructor(final java.lang.reflect.Constructor<?>[] outputConstructors,
                                                                          final Object inputObject) {
@@ -124,6 +158,14 @@ public class MM4J {
                     .findFirst().orElseThrow(RuntimeException::new);
         }
 
+        private Method findMatchingMethod(final Parameter param, final List<Method> methods, final String mapFrom,
+                                          final boolean isCaseSensitive) {
+            return methods.stream()
+                    .filter(method -> method.getReturnType().equals(param.getType()))
+                    .filter(method -> isCaseSensitive ? method.getName().equals(mapFrom) : method.getName().equalsIgnoreCase(mapFrom))
+                    .findFirst().orElseThrow(RuntimeException::new);
+        }
+
         private boolean filterByParamName(final Parameter param, final Method method) {
             return !param.isNamePresent() || method.getName().equals(param.getName());
         }
@@ -135,5 +177,13 @@ public class MM4J {
                     .collect(Collectors.toList());
         }
 
+        private List<Mapping> getMappingAnnotations(final Method callerMethod) {
+            return Arrays.stream(callerMethod.getAnnotations())
+                    .filter(annotation -> annotation.annotationType().equals(Mappings.class))
+                    .map(mappings ->
+                            ((Mappings) mappings).value()
+                    ).flatMap(Stream::of)
+                    .collect(Collectors.toList());
+        }
     }
 }

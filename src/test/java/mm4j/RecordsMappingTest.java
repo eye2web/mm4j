@@ -12,7 +12,7 @@ import org.junit.jupiter.api.TestInstance;
 import java.util.UUID;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-public class MM4JTest {
+public class RecordsMappingTest {
 
     private RecordMapper recordMapper;
 
@@ -99,6 +99,16 @@ public class MM4JTest {
         Assertions.assertEquals(input.id(), result.id());
         Assertions.assertEquals("Eva", result.firstName());
         Assertions.assertEquals("Henderson", result.surName());
+    }
+
+    @Test
+    public void swapFirstAndLastNameTest() {
+        final var input = new FromRecordOne(UUID.randomUUID(), "Justin", "Henderson");
+        final var result = recordMapper.swapFirstAndLastName(input);
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals("Henderson", result.firstName());
+        Assertions.assertEquals("Justin", result.surName());
     }
 
 }

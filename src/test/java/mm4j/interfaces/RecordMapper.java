@@ -1,6 +1,7 @@
 package mm4j.interfaces;
 
 import mm4j.annotation.Constructor;
+import mm4j.annotation.Mapping;
 import mm4j.records.*;
 
 public interface RecordMapper {
@@ -19,4 +20,8 @@ public interface RecordMapper {
 
     @Constructor(mappings = {"id", "surname"}, caseSensitive = false)
     ToRecordThree multiAnnotatedConstructorMapCaseInsensitive(final FromRecordThree fromRecordThree);
+
+    @Mapping(mapFrom = "surName", mapTo = "firstName")
+    @Mapping(mapFrom = "firstname", mapTo = "surname", caseSensitive = false)
+    ToRecordOne swapFirstAndLastName(final FromRecordOne fromRecordOne);
 }
