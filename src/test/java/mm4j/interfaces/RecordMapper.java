@@ -24,4 +24,10 @@ public interface RecordMapper {
     @Mapping(mapFrom = "surName", mapTo = "firstName")
     @Mapping(mapFrom = "firstname", mapTo = "surname", caseSensitive = false)
     ToRecordOne swapFirstAndLastName(final FromRecordOne fromRecordOne);
+
+    @Mapping(mapFrom = "surName", mapTo = "firstName")
+    ToRecordOne firstNameIsLastName(final FromRecordOne fromRecordOne);
+
+    @Mapping(mapFrom = "surName", mapTo = "firstName")
+    ToRecordThree multiConstructorMapWithMapping(final FromRecordTwo fromRecordTwo);
 }

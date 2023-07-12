@@ -111,4 +111,17 @@ public class RecordsMappingTest {
         Assertions.assertEquals("Justin", result.surName());
     }
 
+    @Test
+    public void firstNameIsLastNameTest() {
+        final var input = new FromRecordOne(UUID.randomUUID(), "Justin", "Henderson");
+        final var result = recordMapper.firstNameIsLastName(input);
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals("Henderson", result.firstName());
+        Assertions.assertEquals("Henderson", result.surName());
+    }
+
+
+
+
 }

@@ -3,6 +3,7 @@ package mm4j;
 import mm4j.annotation.Constructor;
 import mm4j.annotation.Mapping;
 import mm4j.annotation.Mappings;
+import mm4j.exception.MM4JMappingException;
 
 import java.lang.reflect.*;
 import java.util.ArrayList;
@@ -90,7 +91,10 @@ public class MM4J {
                                         findMatchingMethod(constructorParam, methods)
                                 );
 
-                        methods.remove(method);
+                        if (mappingAnnotations.isEmpty()) {
+                            methods.remove(method);
+                        }
+
                         try {
                             return method.invoke(inputObject);
                         } catch (final InvocationTargetException | IllegalAccessException ex) {
@@ -102,8 +106,11 @@ public class MM4J {
         }
 
         private Optional<Mapping> getMatchingMappingAnnotation(final List<Mapping> mappingAnnotations, final Parameter param) {
-            if (!param.isNamePresent()) {
-                return Optional.empty();
+            if (!param.isNamePresent() && !mappingAnnotations.isEmpty()) {
+                throw new MM4JMappingException("""
+                        Constructor parameter names should be present when using @Mapping feature!
+                        Only the first class constructor supports this. This is a Java restriction
+                        """.stripIndent());
             }
 
             return mappingAnnotations.stream()
@@ -178,12 +185,20 @@ public class MM4J {
         }
 
         private List<Mapping> getMappingAnnotations(final Method callerMethod) {
-            return Arrays.stream(callerMethod.getAnnotations())
+            final var mappingsAnnotations = Arrays.stream(callerMethod.getAnnotations())
                     .filter(annotation -> annotation.annotationType().equals(Mappings.class))
                     .map(mappings ->
                             ((Mappings) mappings).value()
                     ).flatMap(Stream::of)
                     .collect(Collectors.toList());
+
+            mappingsAnnotations.addAll(Arrays.stream(callerMethod.getAnnotations())
+                    .filter(annotation -> annotation.annotationType().equals(Mapping.class))
+                    .map(mappings ->
+                            (Mapping) mappings
+                    ).collect(Collectors.toList()));
+
+            return mappingsAnnotations;
         }
     }
 }
